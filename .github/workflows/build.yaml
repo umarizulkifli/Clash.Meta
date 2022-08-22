@@ -4,8 +4,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      GOAMD64: v1
     steps:
       - name: Set up Go
         uses: actions/setup-go@v1
@@ -13,8 +11,6 @@ jobs:
           go-version: 1.18
       - name: Check out code
         uses: actions/checkout@v1
-      - name: Set env vars
-        run: echo "GOAMD64=v1" >> $GITHUB_ENV
       - name: Build
         run: make all
       - name: Release
