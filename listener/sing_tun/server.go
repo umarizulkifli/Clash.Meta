@@ -166,6 +166,8 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		Inet6Address:       common.Map(options.Inet6Address, config.ListenPrefix.Build),
 		AutoRoute:          options.AutoRoute,
 		StrictRoute:        options.StrictRoute,
+		Inet4RouteAddress:  common.Map(options.Inet4RouteAddress, config.ListenPrefix.Build),
+		Inet6RouteAddress:  common.Map(options.Inet6RouteAddress, config.ListenPrefix.Build),
 		IncludeUID:         includeUID,
 		ExcludeUID:         excludeUID,
 		IncludeAndroidUser: options.IncludeAndroidUser,
@@ -180,7 +182,7 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		err = E.Cause(err, "build android rules")
 		return
 	}
-	tunIf, err := tun.Open(tunOptions)
+	tunIf, err := tunOpen(tunOptions)
 	if err != nil {
 		err = E.Cause(err, "configure tun interface")
 		return

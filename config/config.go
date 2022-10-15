@@ -124,6 +124,8 @@ type Tun struct {
 	Inet4Address           []ListenPrefix `yaml:"inet4-address" json:"inet4_address,omitempty"`
 	Inet6Address           []ListenPrefix `yaml:"inet6-address" json:"inet6_address,omitempty"`
 	StrictRoute            bool           `yaml:"strict-route" json:"strict_route,omitempty"`
+	Inet4RouteAddress      []ListenPrefix `yaml:"inet4_route_address" json:"inet4_route_address,omitempty"`
+	Inet6RouteAddress      []ListenPrefix `yaml:"inet6_route_address" json:"inet6_route_address,omitempty"`
 	IncludeUID             []uint32       `yaml:"include-uid" json:"include_uid,omitempty"`
 	IncludeUIDRange        []string       `yaml:"include-uid-range" json:"include_uid_range,omitempty"`
 	ExcludeUID             []uint32       `yaml:"exclude-uid" json:"exclude_uid,omitempty"`
@@ -193,12 +195,14 @@ type IPTables struct {
 }
 
 type Sniffer struct {
-	Enable      bool
-	Sniffers    []sniffer.Type
-	Reverses    *trie.DomainTrie[bool]
-	ForceDomain *trie.DomainTrie[bool]
-	SkipDomain  *trie.DomainTrie[bool]
-	Ports       *[]utils.Range[uint16]
+	Enable          bool
+	Sniffers        []sniffer.Type
+	Reverses        *trie.DomainTrie[bool]
+	ForceDomain     *trie.DomainTrie[bool]
+	SkipDomain      *trie.DomainTrie[bool]
+	Ports           *[]utils.Range[uint16]
+	ForceDnsMapping bool
+	ParsePureIp     bool
 }
 
 // Experimental config
@@ -262,6 +266,8 @@ type RawTun struct {
 	//Inet4Address           []ListenPrefix `yaml:"inet4-address" json:"inet4_address,omitempty"`
 	Inet6Address           []ListenPrefix `yaml:"inet6-address" json:"inet6_address,omitempty"`
 	StrictRoute            bool           `yaml:"strict-route" json:"strict_route,omitempty"`
+	Inet4RouteAddress      []ListenPrefix `yaml:"inet4_route_address" json:"inet4_route_address,omitempty"`
+	Inet6RouteAddress      []ListenPrefix `yaml:"inet6_route_address" json:"inet6_route_address,omitempty"`
 	IncludeUID             []uint32       `yaml:"include-uid" json:"include_uid,omitempty"`
 	IncludeUIDRange        []string       `yaml:"include-uid-range" json:"include_uid_range,omitempty"`
 	ExcludeUID             []uint32       `yaml:"exclude-uid" json:"exclude_uid,omitempty"`
@@ -321,11 +327,13 @@ type RawGeoXUrl struct {
 }
 
 type RawSniffer struct {
-	Enable      bool     `yaml:"enable" json:"enable"`
-	Sniffing    []string `yaml:"sniffing" json:"sniffing"`
-	ForceDomain []string `yaml:"force-domain" json:"force-domain"`
-	SkipDomain  []string `yaml:"skip-domain" json:"skip-domain"`
-	Ports       []string `yaml:"port-whitelist" json:"port-whitelist"`
+	Enable          bool     `yaml:"enable" json:"enable"`
+	Sniffing        []string `yaml:"sniffing" json:"sniffing"`
+	ForceDomain     []string `yaml:"force-domain" json:"force-domain"`
+	SkipDomain      []string `yaml:"skip-domain" json:"skip-domain"`
+	Ports           []string `yaml:"port-whitelist" json:"port-whitelist"`
+	ForceDnsMapping bool     `yaml:"force-dns-mapping" json:"force-dns-mapping"`
+	ParsePureIp     bool     `yaml:"parse-pure-ip" json:"parse-pure-ip"`
 }
 
 // EBpf config
@@ -415,11 +423,13 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			},
 		},
 		Sniffer: RawSniffer{
-			Enable:      false,
-			Sniffing:    []string{},
-			ForceDomain: []string{},
-			SkipDomain:  []string{},
-			Ports:       []string{},
+			Enable:          false,
+			Sniffing:        []string{},
+			ForceDomain:     []string{},
+			SkipDomain:      []string{},
+			Ports:           []string{},
+			ForceDnsMapping: true,
+			ParsePureIp:     true,
 		},
 		Profile: Profile{
 			StoreSelected: true,
@@ -1153,6 +1163,8 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 		Inet4Address:           []ListenPrefix{ListenPrefix(tunAddressPrefix)},
 		Inet6Address:           rawTun.Inet6Address,
 		StrictRoute:            rawTun.StrictRoute,
+		Inet4RouteAddress:      rawTun.Inet4RouteAddress,
+		Inet6RouteAddress:      rawTun.Inet6RouteAddress,
 		IncludeUID:             rawTun.IncludeUID,
 		IncludeUIDRange:        rawTun.IncludeUIDRange,
 		ExcludeUID:             rawTun.ExcludeUID,
@@ -1167,7 +1179,9 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 
 func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	sniffer := &Sniffer{
-		Enable: snifferRaw.Enable,
+		Enable:          snifferRaw.Enable,
+		ForceDnsMapping: snifferRaw.ForceDnsMapping,
+		ParsePureIp:     snifferRaw.ParsePureIp,
 	}
 
 	var ports []utils.Range[uint16]
