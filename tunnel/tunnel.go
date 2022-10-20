@@ -107,7 +107,7 @@ func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provid
 
 func UpdateSniffer(dispatcher *sniffer.SnifferDispatcher) {
 	configMux.Lock()
-	sniffer.Dispatcher = *dispatcher
+	sniffer.Dispatcher = dispatcher
 	sniffingEnable = true
 	configMux.Unlock()
 }
@@ -269,7 +269,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
 		defer cancel()
-		rawPc, err := proxy.ListenPacketContext(ctx, metadata)
+		rawPc, err := proxy.ListenPacketContext(ctx, metadata.Pure())
 		if err != nil {
 			if rule == nil {
 				log.Warnln("[UDP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -410,12 +410,13 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			}
 		}
 
-		if rule.Match(metadata) {
-			adapter, ok := proxies[rule.Adapter()]
+		if matched, ada := rule.Match(metadata); matched {
+			adapter, ok := proxies[ada]
 			if !ok {
 				continue
 			}
 
+			// only unwrap one group, multi-layer nesting will be invalid
 			if adapter.Type() == C.Pass || (adapter.Unwrap(metadata) != nil && adapter.Unwrap(metadata).Type() == C.Pass) {
 				log.Debugln("%s match Pass rule", adapter.Name())
 				continue
