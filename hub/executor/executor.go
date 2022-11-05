@@ -86,7 +86,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	loadRuleProvider(cfg.RuleProviders)
 	updateGeneral(cfg.General, force)
 	updateIPTables(cfg)
-	updateTun(cfg.Tun)
+	updateTun(cfg.General)
 	updateExperimental(cfg)
 
 	log.SetLevel(cfg.General.LogLevel)
@@ -258,9 +258,12 @@ func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
 	wg.Wait()
 }
 
-func updateTun(tun *config.Tun) {
-	P.ReCreateTun(tun, tunnel.TCPIn(), tunnel.UDPIn())
-	P.ReCreateRedirToTun(tun.RedirectToTun)
+func updateTun(general *config.General) {
+	if general == nil {
+		return
+	}
+	P.ReCreateTun(general.Tun, tunnel.TCPIn(), tunnel.UDPIn())
+	P.ReCreateRedirToTun(general.Tun.RedirectToTun)
 }
 
 func updateSniffer(sniffer *config.Sniffer) {
@@ -400,7 +403,7 @@ func updateIPTables(cfg *config.Config) {
 		}
 	}()
 
-	if cfg.Tun.Enable {
+	if cfg.General.Tun.Enable {
 		err = fmt.Errorf("when tun is enabled, iptables cannot be set automatically")
 		return
 	}

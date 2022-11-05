@@ -121,20 +121,20 @@ type Tun struct {
 	RedirectToTun       []string         `yaml:"-" json:"-"`
 
 	MTU                    uint32         `yaml:"mtu" json:"mtu,omitempty"`
-	Inet4Address           []ListenPrefix `yaml:"inet4-address" json:"inet4_address,omitempty"`
-	Inet6Address           []ListenPrefix `yaml:"inet6-address" json:"inet6_address,omitempty"`
-	StrictRoute            bool           `yaml:"strict-route" json:"strict_route,omitempty"`
-	Inet4RouteAddress      []ListenPrefix `yaml:"inet4_route_address" json:"inet4_route_address,omitempty"`
-	Inet6RouteAddress      []ListenPrefix `yaml:"inet6_route_address" json:"inet6_route_address,omitempty"`
-	IncludeUID             []uint32       `yaml:"include-uid" json:"include_uid,omitempty"`
-	IncludeUIDRange        []string       `yaml:"include-uid-range" json:"include_uid_range,omitempty"`
-	ExcludeUID             []uint32       `yaml:"exclude-uid" json:"exclude_uid,omitempty"`
-	ExcludeUIDRange        []string       `yaml:"exclude-uid-range" json:"exclude_uid_range,omitempty"`
-	IncludeAndroidUser     []int          `yaml:"include-android-user" json:"include_android_user,omitempty"`
-	IncludePackage         []string       `yaml:"include-package" json:"include_package,omitempty"`
-	ExcludePackage         []string       `yaml:"exclude-package" json:"exclude_package,omitempty"`
-	EndpointIndependentNat bool           `yaml:"endpoint-independent-nat" json:"endpoint_independent_nat,omitempty"`
-	UDPTimeout             int64          `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
+	Inet4Address           []ListenPrefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
+	Inet6Address           []ListenPrefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
+	StrictRoute            bool           `yaml:"strict-route" json:"strict-route,omitempty"`
+	Inet4RouteAddress      []ListenPrefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
+	Inet6RouteAddress      []ListenPrefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
+	IncludeUID             []uint32       `yaml:"include-uid" json:"include-uid,omitempty"`
+	IncludeUIDRange        []string       `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
+	ExcludeUID             []uint32       `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
+	ExcludeUIDRange        []string       `yaml:"exclude-uid-range" json:"exclude-uid-range,omitempty"`
+	IncludeAndroidUser     []int          `yaml:"include-android-user" json:"include-android-user,omitempty"`
+	IncludePackage         []string       `yaml:"include-package" json:"include-package,omitempty"`
+	ExcludePackage         []string       `yaml:"exclude-package" json:"exclude-package,omitempty"`
+	EndpointIndependentNat bool           `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
+	UDPTimeout             int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
 }
 
 type ListenPrefix netip.Prefix
@@ -197,9 +197,9 @@ type IPTables struct {
 type Sniffer struct {
 	Enable          bool
 	Sniffers        []sniffer.Type
-	Reverses        *trie.DomainTrie[bool]
-	ForceDomain     *trie.DomainTrie[bool]
-	SkipDomain      *trie.DomainTrie[bool]
+	Reverses        *trie.DomainTrie[struct{}]
+	ForceDomain     *trie.DomainTrie[struct{}]
+	SkipDomain      *trie.DomainTrie[struct{}]
 	Ports           *[]utils.Range[uint16]
 	ForceDnsMapping bool
 	ParsePureIp     bool
@@ -213,7 +213,6 @@ type Experimental struct {
 // Config is clash config manager
 type Config struct {
 	General       *General
-	Tun           *Tun
 	IPTables      *IPTables
 	DNS           *DNS
 	Experimental  *Experimental
@@ -496,11 +495,10 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.DNS = dnsCfg
 
-	tunCfg, err := parseTun(rawCfg.Tun, config.General, dnsCfg)
+	err = parseTun(rawCfg.Tun, config.General, dnsCfg)
 	if err != nil {
 		return nil, err
 	}
-	config.Tun = tunCfg
 
 	config.Users = parseAuthentication(rawCfg.Authentication)
 
@@ -1061,24 +1059,24 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 			return nil, err
 		}
 
-		var host *trie.DomainTrie[bool]
+		var host *trie.DomainTrie[struct{}]
 		// fake ip skip host filter
 		if len(cfg.FakeIPFilter) != 0 {
-			host = trie.New[bool]()
+			host = trie.New[struct{}]()
 			for _, domain := range cfg.FakeIPFilter {
-				_ = host.Insert(domain, true)
+				_ = host.Insert(domain, struct{}{})
 			}
 		}
 
 		if len(dnsCfg.Fallback) != 0 {
 			if host == nil {
-				host = trie.New[bool]()
+				host = trie.New[struct{}]()
 			}
 			for _, fb := range dnsCfg.Fallback {
 				if net.ParseIP(fb.Addr) != nil {
 					continue
 				}
-				_ = host.Insert(fb.Addr, true)
+				_ = host.Insert(fb.Addr, struct{}{})
 			}
 		}
 
@@ -1126,7 +1124,7 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 	return users
 }
 
-func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
+func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) error {
 	var dnsHijack []netip.AddrPort
 
 	for _, d := range rawTun.DNSHijack {
@@ -1136,7 +1134,7 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 		d = strings.Replace(d, "any", "0.0.0.0", 1)
 		addrPort, err := netip.ParseAddrPort(d)
 		if err != nil {
-			return nil, fmt.Errorf("parse dns-hijack url error: %w", err)
+			return fmt.Errorf("parse dns-hijack url error: %w", err)
 		}
 
 		dnsHijack = append(dnsHijack, addrPort)
@@ -1150,7 +1148,7 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 	}
 	tunAddressPrefix = netip.PrefixFrom(tunAddressPrefix.Addr(), 30)
 
-	return &Tun{
+	general.Tun = Tun{
 		Enable:              rawTun.Enable,
 		Device:              rawTun.Device,
 		Stack:               rawTun.Stack,
@@ -1174,7 +1172,9 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 		ExcludePackage:         rawTun.ExcludePackage,
 		EndpointIndependentNat: rawTun.EndpointIndependentNat,
 		UDPTimeout:             rawTun.UDPTimeout,
-	}, nil
+	}
+
+	return nil
 }
 
 func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
@@ -1232,17 +1232,17 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	for st := range loadSniffer {
 		sniffer.Sniffers = append(sniffer.Sniffers, st)
 	}
-	sniffer.ForceDomain = trie.New[bool]()
+	sniffer.ForceDomain = trie.New[struct{}]()
 	for _, domain := range snifferRaw.ForceDomain {
-		err := sniffer.ForceDomain.Insert(domain, true)
+		err := sniffer.ForceDomain.Insert(domain, struct{}{})
 		if err != nil {
 			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
 		}
 	}
 
-	sniffer.SkipDomain = trie.New[bool]()
+	sniffer.SkipDomain = trie.New[struct{}]()
 	for _, domain := range snifferRaw.SkipDomain {
-		err := sniffer.SkipDomain.Insert(domain, true)
+		err := sniffer.SkipDomain.Insert(domain, struct{}{})
 		if err != nil {
 			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
 		}
