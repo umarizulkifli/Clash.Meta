@@ -20,8 +20,12 @@ const (
 	HTTPS
 	SOCKS4
 	SOCKS5
+	SHADOWSOCKS
+	VMESS
 	REDIR
 	TPROXY
+	TCPTUN
+	UDPTUN
 	TUN
 	INNER
 )
@@ -53,10 +57,18 @@ func (t Type) String() string {
 		return "Socks4"
 	case SOCKS5:
 		return "Socks5"
+	case SHADOWSOCKS:
+		return "ShadowSocks"
+	case VMESS:
+		return "Vmess"
 	case REDIR:
 		return "Redir"
 	case TPROXY:
 		return "TProxy"
+	case TCPTUN:
+		return "TcpTun"
+	case UDPTUN:
+		return "UdpTun"
 	case TUN:
 		return "Tun"
 	case INNER:
@@ -103,9 +115,11 @@ type Metadata struct {
 	DstIP       netip.Addr `json:"destinationIP"`
 	SrcPort     string     `json:"sourcePort"`
 	DstPort     string     `json:"destinationPort"`
+	InIP        netip.Addr `json:"inboundIP"`
+	InPort      string     `json:"inboundPort"`
 	Host        string     `json:"host"`
 	DNSMode     DNSMode    `json:"dnsMode"`
-	Uid         *int32     `json:"uid"`
+	Uid         *uint32    `json:"uid"`
 	Process     string     `json:"process"`
 	ProcessPath string     `json:"processPath"`
 	RemoteDst   string     `json:"remoteDestination"`
