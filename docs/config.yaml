@@ -97,11 +97,34 @@ sniffer:
     - "443"
     # - 8000-9999
 
-# shadowsocks,vmess,tcp/udp端口转发 入口配置（传入流量将和socks,mixed等入口一样按照mode所指定的方式进行匹配处理）
+# shadowsocks,vmess 入口配置（传入流量将和socks,mixed等入口一样按照mode所指定的方式进行匹配处理）
 # ss-config: ss://2022-blake3-aes-256-gcm:vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=@:23456
 # vmess-config: vmess://1:9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68@:12345
-# tcptun-config: 127.0.0.1:801=www.example.com:80,127.0.0.1:4431=www.example.com:443
-# udptun-config: 127.0.0.1:531=8.8.8.8:53,127.0.0.1:532=1.1.1.1:53
+
+# tuic服务器入口（传入流量将和socks,mixed等入口一样按照mode所指定的方式进行匹配处理）
+#tuic-server:
+#  enable: true
+#  listen: 127.0.0.1:10443
+#  token:
+#    - TOKEN
+#  certificate: ./server.crt
+#  private-key: ./server.key
+#  congestion-controller: bbr
+#  max-idle-time: 15000
+#  authentication-timeout: 1000
+#  alpn:
+#    - h3
+#  max-udp-relay-packet-size: 1500
+
+tunnels:
+  # one line config
+  - tcp/udp,127.0.0.1:6553,114.114.114.114:53,proxy
+  - tcp,127.0.0.1:6666,rds.mysql.com:3306,vpn
+  # full yaml config
+  - network: [tcp, udp]
+    address: 127.0.0.1:7777
+    target: target.com
+    proxy: proxy
 
 profile:
   # 存储select选择记录
@@ -432,21 +455,26 @@ proxies:
     type: hysteria
     server: server.com
     port: 443
-    auth_str: yourpassword
+    auth_str: yourpassword # 将会在未来某个时候删除
+    # auth-str: yourpassword
     # obfs: obfs_str
     # alpn:
     #   - h3
     protocol: udp # 支持 udp/wechat-video/faketcp
     up: "30 Mbps" # 若不写单位，默认为 Mbps
     down: "200 Mbps" # 若不写单位，默认为 Mbps
-    #sni: server.com
-    #skip-cert-verify: false
-    #recv_window_conn: 12582912
-    #recv_window: 52428800
-    #ca: "./my.ca"
-    #ca_str: "xyz"
-    #disable_mtu_discovery: false
+    # sni: server.com
+    # skip-cert-verify: false
+    # recv_window_conn: 12582912 # 将会在未来某个时候删除
+    # recv-window-conn: 12582912
+    # recv_window: 52428800 # 将会在未来某个时候删除
+    # recv-window: 52428800 
+    # ca: "./my.ca"
+    # ca_str: "xyz" # 将会在未来某个时候删除
+    # ca-str: "xyz"
+    # disable_mtu_discovery: false
     # fingerprint: xxxx
+    # fast-open: true # 支持 TCP 快速打开，默认为 false
 
   - name: "wg"
     type: wireguard
@@ -457,6 +485,23 @@ proxies:
     private-key: eCtXsJZ27+4PbhDkHnB923tkUn2Gj59wZw5wFA75MnU=
     public-key: Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo=
     udp: true
+
+  - name: tuic
+    server: www.example.com
+    port: 10443
+    type: tuic
+    token: TOKEN
+    # ip: 127.0.0.1 # for overwriting the DNS lookup result of the server address set in option 'server'
+    # heartbeat-interval: 10000
+    # alpn: [h3]
+    # disable-sni: true
+    reduce-rtt: true
+    # request-timeout: 8000
+    udp-relay-mode: native # Available: "native", "quic". Default: "native"
+    # congestion-controller: bbr # Available: "cubic", "new_reno", "bbr". Default: "cubic"
+    # max-udp-relay-packet-size: 1500
+    # fast-open: true
+    # skip-cert-verify: true
 
   # ShadowsocksR
   # The supported ciphers (encryption methods): all stream ciphers in ss

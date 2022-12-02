@@ -36,6 +36,7 @@ import (
 	"github.com/Dreamacro/clash/log"
 	T "github.com/Dreamacro/clash/tunnel"
 
+	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
 )
 
@@ -54,6 +55,7 @@ type General struct {
 	TCPConcurrent bool         `json:"tcp-concurrent"`
 	EnableProcess bool         `json:"enable-process"`
 	Tun           Tun          `json:"tun"`
+	TuicServer    TuicServer   `json:"tuic-server"`
 	Sniffing      bool         `json:"sniffing"`
 	EBpf          EBpf         `json:"-"`
 }
@@ -67,8 +69,6 @@ type Inbound struct {
 	MixedPort         int      `json:"mixed-port"`
 	ShadowSocksConfig string   `json:"ss-config"`
 	VmessConfig       string   `json:"vmess-config"`
-	TcpTunConfig      string   `json:"tcptun-config"`
-	UdpTunConfig      string   `json:"udptun-config"`
 	Authentication    []string `json:"authentication"`
 	AllowLan          bool     `json:"allow-lan"`
 	BindAddress       string   `json:"bind-address"`
@@ -112,6 +112,24 @@ type FallbackFilter struct {
 type Profile struct {
 	StoreSelected bool `yaml:"store-selected"`
 	StoreFakeIP   bool `yaml:"store-fake-ip"`
+}
+
+type TuicServer struct {
+	Enable                bool     `yaml:"enable" json:"enable"`
+	Listen                string   `yaml:"listen" json:"listen"`
+	Token                 []string `yaml:"token" json:"token"`
+	Certificate           string   `yaml:"certificate" json:"certificate"`
+	PrivateKey            string   `yaml:"private-key" json:"private-key"`
+	CongestionController  string   `yaml:"congestion-controller" json:"congestion-controller,omitempty"`
+	MaxIdleTime           int      `yaml:"max-idle-time" json:"max-idle-time,omitempty"`
+	AuthenticationTimeout int      `yaml:"authentication-timeout" json:"authentication-timeout,omitempty"`
+	ALPN                  []string `yaml:"alpn" json:"alpn,omitempty"`
+	MaxUdpRelayPacketSize int      `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
+}
+
+func (t TuicServer) String() string {
+	b, _ := json.Marshal(t)
+	return string(b)
 }
 
 // Tun config
@@ -228,6 +246,7 @@ type Config struct {
 	Proxies       map[string]C.Proxy
 	Providers     map[string]providerTypes.ProxyProvider
 	RuleProviders map[string]providerTypes.RuleProvider
+	Tunnels       []Tunnel
 	Sniffer       *Sniffer
 }
 
@@ -282,6 +301,79 @@ type RawTun struct {
 	UDPTimeout             int64          `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
 }
 
+type RawTuicServer struct {
+	Enable                bool     `yaml:"enable" json:"enable"`
+	Listen                string   `yaml:"listen" json:"listen"`
+	Token                 []string `yaml:"token" json:"token"`
+	Certificate           string   `yaml:"certificate" json:"certificate"`
+	PrivateKey            string   `yaml:"private-key" json:"private-key"`
+	CongestionController  string   `yaml:"congestion-controller" json:"congestion-controller,omitempty"`
+	MaxIdleTime           int      `yaml:"max-idle-time" json:"max-idle-time,omitempty"`
+	AuthenticationTimeout int      `yaml:"authentication-timeout" json:"authentication-timeout,omitempty"`
+	ALPN                  []string `yaml:"alpn" json:"alpn,omitempty"`
+	MaxUdpRelayPacketSize int      `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
+}
+
+type tunnel struct {
+	Network []string `yaml:"network"`
+	Address string   `yaml:"address"`
+	Target  string   `yaml:"target"`
+	Proxy   string   `yaml:"proxy"`
+}
+
+type Tunnel tunnel
+
+// UnmarshalYAML implements yaml.Unmarshaler
+func (t *Tunnel) UnmarshalYAML(unmarshal func(any) error) error {
+	var tp string
+	if err := unmarshal(&tp); err != nil {
+		var inner tunnel
+		if err := unmarshal(&inner); err != nil {
+			return err
+		}
+
+		*t = Tunnel(inner)
+		return nil
+	}
+
+	// parse udp/tcp,address,target,proxy
+	parts := lo.Map(strings.Split(tp, ","), func(s string, _ int) string {
+		return strings.TrimSpace(s)
+	})
+	if len(parts) != 3 && len(parts) != 4 {
+		return fmt.Errorf("invalid tunnel config %s", tp)
+	}
+	network := strings.Split(parts[0], "/")
+
+	// validate network
+	for _, n := range network {
+		switch n {
+		case "tcp", "udp":
+		default:
+			return fmt.Errorf("invalid tunnel network %s", n)
+		}
+	}
+
+	// validate address and target
+	address := parts[1]
+	target := parts[2]
+	for _, addr := range []string{address, target} {
+		if _, _, err := net.SplitHostPort(addr); err != nil {
+			return fmt.Errorf("invalid tunnel target or address %s", addr)
+		}
+	}
+
+	*t = Tunnel(tunnel{
+		Network: network,
+		Address: address,
+		Target:  target,
+	})
+	if len(parts) == 4 {
+		t.Proxy = parts[3]
+	}
+	return nil
+}
+
 type RawConfig struct {
 	Port               int          `yaml:"port"`
 	SocksPort          int          `yaml:"socks-port"`
@@ -290,8 +382,6 @@ type RawConfig struct {
 	MixedPort          int          `yaml:"mixed-port"`
 	ShadowSocksConfig  string       `yaml:"ss-config"`
 	VmessConfig        string       `yaml:"vmess-config"`
-	TcpTunConfig       string       `yaml:"tcptun-config"`
-	UdpTunConfig       string       `yaml:"udptun-config"`
 	InboundTfo         bool         `yaml:"inbound-tfo"`
 	Authentication     []string     `yaml:"authentication"`
 	AllowLan           bool         `yaml:"allow-lan"`
@@ -305,6 +395,7 @@ type RawConfig struct {
 	Secret             string       `yaml:"secret"`
 	Interface          string       `yaml:"interface-name"`
 	RoutingMark        int          `yaml:"routing-mark"`
+	Tunnels            []Tunnel     `yaml:"tunnels"`
 	GeodataMode        bool         `yaml:"geodata-mode"`
 	GeodataLoader      string       `yaml:"geodata-loader"`
 	TCPConcurrent      bool         `yaml:"tcp-concurrent" json:"tcp-concurrent"`
@@ -316,6 +407,7 @@ type RawConfig struct {
 	Hosts         map[string]string         `yaml:"hosts"`
 	DNS           RawDNS                    `yaml:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
+	TuicServer    RawTuicServer             `yaml:"tuic-server"`
 	EBpf          EBpf                      `yaml:"ebpf"`
 	IPTables      IPTables                  `yaml:"iptables"`
 	Experimental  Experimental              `yaml:"experimental"`
@@ -391,6 +483,18 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			AutoRoute:           true,
 			AutoDetectInterface: true,
 			Inet6Address:        []ListenPrefix{ListenPrefix(netip.MustParsePrefix("fdfe:dcba:9876::1/126"))},
+		},
+		TuicServer: RawTuicServer{
+			Enable:                false,
+			Token:                 nil,
+			Certificate:           "",
+			PrivateKey:            "",
+			Listen:                "",
+			CongestionController:  "",
+			MaxIdleTime:           15000,
+			AuthenticationTimeout: 1000,
+			ALPN:                  []string{"h3"},
+			MaxUdpRelayPacketSize: 1500,
 		},
 		EBpf: EBpf{
 			RedirectToTun: []string{},
@@ -508,7 +612,22 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 
+	err = parseTuicServer(rawCfg.TuicServer, config.General)
+	if err != nil {
+		return nil, err
+	}
+
 	config.Users = parseAuthentication(rawCfg.Authentication)
+
+	config.Tunnels = rawCfg.Tunnels
+	// verify tunnels
+	for _, t := range config.Tunnels {
+		if len(t.Proxy) > 0 {
+			if _, ok := config.Proxies[t.Proxy]; !ok {
+				return nil, fmt.Errorf("tunnel proxy %s not found", t.Proxy)
+			}
+		}
+	}
 
 	config.Sniffer, err = parseSniffer(rawCfg.Sniffer)
 	if err != nil {
@@ -517,6 +636,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
 	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
+
 	return config, nil
 }
 
@@ -541,8 +661,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			MixedPort:         cfg.MixedPort,
 			ShadowSocksConfig: cfg.ShadowSocksConfig,
 			VmessConfig:       cfg.VmessConfig,
-			TcpTunConfig:      cfg.TcpTunConfig,
-			UdpTunConfig:      cfg.UdpTunConfig,
 			AllowLan:          cfg.AllowLan,
 			BindAddress:       cfg.BindAddress,
 			InboundTfo:        cfg.InboundTfo,
@@ -854,6 +972,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[netip.Addr], error) {
 			_ = tree.Insert(domain, ip)
 		}
 	}
+	tree.Optimize()
 
 	return tree, nil
 }
@@ -905,8 +1024,8 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			if _, _, err := net.SplitHostPort(host); err != nil && strings.Contains(err.Error(), "missing port in address") {
 				host = net.JoinHostPort(host, "443")
 			} else {
-				if err!=nil{
-					return nil,err
+				if err != nil {
+					return nil, err
 				}
 			}
 			clearURL := url.URL{Scheme: "https", Host: host, Path: u.Path}
@@ -1088,6 +1207,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 			for _, domain := range cfg.FakeIPFilter {
 				_ = host.Insert(domain, struct{}{})
 			}
+			host.Optimize()
 		}
 
 		if len(dnsCfg.Fallback) != 0 {
@@ -1100,6 +1220,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 				}
 				_ = host.Insert(fb.Addr, struct{}{})
 			}
+			host.Optimize()
 		}
 
 		pool, err := fakeip.New(fakeip.Options{
@@ -1197,6 +1318,22 @@ func parseTun(rawTun RawTun, general *General) error {
 	return nil
 }
 
+func parseTuicServer(rawTuic RawTuicServer, general *General) error {
+	general.TuicServer = TuicServer{
+		Enable:                rawTuic.Enable,
+		Listen:                rawTuic.Listen,
+		Token:                 rawTuic.Token,
+		Certificate:           rawTuic.Certificate,
+		PrivateKey:            rawTuic.PrivateKey,
+		CongestionController:  rawTuic.CongestionController,
+		MaxIdleTime:           rawTuic.MaxIdleTime,
+		AuthenticationTimeout: rawTuic.AuthenticationTimeout,
+		ALPN:                  rawTuic.ALPN,
+		MaxUdpRelayPacketSize: rawTuic.MaxUdpRelayPacketSize,
+	}
+	return nil
+}
+
 func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	sniffer := &Sniffer{
 		Enable:          snifferRaw.Enable,
@@ -1259,6 +1396,7 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
 		}
 	}
+	sniffer.ForceDomain.Optimize()
 
 	sniffer.SkipDomain = trie.New[struct{}]()
 	for _, domain := range snifferRaw.SkipDomain {
@@ -1267,6 +1405,7 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
 		}
 	}
+	sniffer.SkipDomain.Optimize()
 
 	return sniffer, nil
 }

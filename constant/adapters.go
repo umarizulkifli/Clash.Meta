@@ -32,6 +32,7 @@ const (
 	Trojan
 	Hysteria
 	WireGuard
+	Tuic
 )
 
 const (
@@ -85,6 +86,7 @@ type ProxyAdapter interface {
 	Type() AdapterType
 	Addr() string
 	SupportUDP() bool
+	SupportTFO() bool
 	MarshalJSON() ([]byte, error)
 
 	// StreamConn wraps a protocol around net.Conn with Metadata.
@@ -168,6 +170,8 @@ func (at AdapterType) String() string {
 		return "Hysteria"
 	case WireGuard:
 		return "WireGuard"
+	case Tuic:
+		return "Tuic"
 
 	case Relay:
 		return "Relay"
