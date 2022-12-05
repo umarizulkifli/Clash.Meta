@@ -132,6 +132,8 @@ type Metadata struct {
 	ProcessPath  string     `json:"processPath"`
 	SpecialProxy string     `json:"specialProxy"`
 	RemoteDst    string     `json:"remoteDestination"`
+	InName       string     `json:"inboundName"`
+	SpecialRules string     `json:"specialRules"`
 }
 
 func (m *Metadata) RemoteAddress() string {

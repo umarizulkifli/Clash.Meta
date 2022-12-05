@@ -13,7 +13,6 @@ import (
 
 	"github.com/jpillora/backoff"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/nat"
 	P "github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -27,9 +26,11 @@ import (
 
 var (
 	tcpQueue       = make(chan C.ConnContext, 200)
-	udpQueue       = make(chan *inbound.PacketAdapter, 200)
+	udpQueue       = make(chan C.PacketAdapter, 200)
 	natTable       = nat.New()
 	rules          []C.Rule
+	listeners      = make(map[string]C.InboundListener)
+	subRules       map[string][]C.Rule
 	proxies        = make(map[string]C.Proxy)
 	providers      map[string]provider.ProxyProvider
 	ruleProviders  map[string]provider.RuleProvider
@@ -77,7 +78,7 @@ func TCPIn() chan<- C.ConnContext {
 }
 
 // UDPIn return fan-in udp queue
-func UDPIn() chan<- *inbound.PacketAdapter {
+func UDPIn() chan<- C.PacketAdapter {
 	return udpQueue
 }
 
@@ -86,11 +87,16 @@ func Rules() []C.Rule {
 	return rules
 }
 
+func Listeners() map[string]C.InboundListener {
+	return listeners
+}
+
 // UpdateRules handle update rules
-func UpdateRules(newRules []C.Rule, rp map[string]provider.RuleProvider) {
+func UpdateRules(newRules []C.Rule, newSubRule map[string][]C.Rule, rp map[string]provider.RuleProvider) {
 	configMux.Lock()
 	rules = newRules
 	ruleProviders = rp
+	subRules = newSubRule
 	configMux.Unlock()
 }
 
@@ -115,6 +121,12 @@ func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provid
 	proxies = newProxies
 	providers = newProviders
 	configMux.Unlock()
+}
+
+func UpdateListeners(newListeners map[string]C.InboundListener) {
+	configMux.Lock()
+	defer configMux.Unlock()
+	listeners = newListeners
 }
 
 func UpdateSniffer(dispatcher *sniffer.SnifferDispatcher) {
@@ -216,7 +228,7 @@ func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, r
 	return
 }
 
-func handleUDPConn(packet *inbound.PacketAdapter) {
+func handleUDPConn(packet C.PacketAdapter) {
 	metadata := packet.Metadata()
 	if !metadata.Valid() {
 		log.Warnln("[Metadata] not valid: %#v", metadata)
@@ -324,7 +336,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		}
 
 		oAddr := metadata.DstIP
-		go handleUDPToLocal(packet.UDPPacket, pc, key, oAddr, fAddr)
+		go handleUDPToLocal(packet, pc, key, oAddr, fAddr)
 
 		natTable.Set(key, pc)
 		handle()
@@ -435,7 +447,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		resolved = true
 	}
 
-	for _, rule := range rules {
+	for _, rule := range getRules(metadata) {
 		if !resolved && shouldResolveIP(rule, metadata) {
 			func() {
 				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
@@ -493,6 +505,16 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	}
 
 	return proxies["DIRECT"], nil, nil
+}
+
+func getRules(metadata *C.Metadata) []C.Rule {
+	if sr, ok := subRules[metadata.SpecialRules]; ok {
+		log.Debugln("[Rule] use %s rules", metadata.SpecialRules)
+		return sr
+	} else {
+		log.Debugln("[Rule] use default rules")
+		return rules
+	}
 }
 
 func retry[T any](ctx context.Context, ft func(context.Context) (T, error), fe func(err error)) (t T, err error) {
