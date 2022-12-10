@@ -6,8 +6,8 @@ require (
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
 	github.com/cilium/ebpf v0.9.3
 	github.com/coreos/go-iptables v0.6.0
-	github.com/djoeni/websocket v0.6.9
 	github.com/database64128/tfo-go/v2 v2.0.2
+	github.com/djoeni/websocket v0.7.1
 	github.com/dlclark/regexp2 v1.7.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/cors v1.2.1
@@ -55,6 +55,7 @@ require (
 	github.com/google/btree v1.0.1 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
+	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/josharian/native v1.0.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/marten-seemann/qpack v0.3.0 // indirect
