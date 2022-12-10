@@ -2,7 +2,6 @@ package config
 
 import (
 	"container/list"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -31,7 +30,6 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	L "github.com/Dreamacro/clash/listener"
 	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/listener/tunnel"
 	"github.com/Dreamacro/clash/log"
 	R "github.com/Dreamacro/clash/rules"
 	RP "github.com/Dreamacro/clash/rules/provider"
@@ -54,25 +52,25 @@ type General struct {
 	GeodataLoader string       `json:"geodata-loader"`
 	TCPConcurrent bool         `json:"tcp-concurrent"`
 	EnableProcess bool         `json:"enable-process"`
-	Tun           Tun          `json:"tun"`
-	TuicServer    TuicServer   `json:"tuic-server"`
 	Sniffing      bool         `json:"sniffing"`
 	EBpf          EBpf         `json:"-"`
 }
 
 // Inbound config
 type Inbound struct {
-	Port              int      `json:"port"`
-	SocksPort         int      `json:"socks-port"`
-	RedirPort         int      `json:"redir-port"`
-	TProxyPort        int      `json:"tproxy-port"`
-	MixedPort         int      `json:"mixed-port"`
-	ShadowSocksConfig string   `json:"ss-config"`
-	VmessConfig       string   `json:"vmess-config"`
-	Authentication    []string `json:"authentication"`
-	AllowLan          bool     `json:"allow-lan"`
-	BindAddress       string   `json:"bind-address"`
-	InboundTfo        bool     `json:"inbound-tfo"`
+	Port              int           `json:"port"`
+	SocksPort         int           `json:"socks-port"`
+	RedirPort         int           `json:"redir-port"`
+	TProxyPort        int           `json:"tproxy-port"`
+	MixedPort         int           `json:"mixed-port"`
+	Tun               LC.Tun        `json:"tun"`
+	TuicServer        LC.TuicServer `json:"tuic-server"`
+	ShadowSocksConfig string        `json:"ss-config"`
+	VmessConfig       string        `json:"vmess-config"`
+	Authentication    []string      `json:"authentication"`
+	AllowLan          bool          `json:"allow-lan"`
+	BindAddress       string        `json:"bind-address"`
+	InboundTfo        bool          `json:"inbound-tfo"`
 }
 
 // Controller config
@@ -115,54 +113,9 @@ type Profile struct {
 	StoreFakeIP   bool `yaml:"store-fake-ip"`
 }
 
-type TuicServer struct {
-	Enable                bool     `yaml:"enable" json:"enable"`
-	Listen                string   `yaml:"listen" json:"listen"`
-	Token                 []string `yaml:"token" json:"token"`
-	Certificate           string   `yaml:"certificate" json:"certificate"`
-	PrivateKey            string   `yaml:"private-key" json:"private-key"`
-	CongestionController  string   `yaml:"congestion-controller" json:"congestion-controller,omitempty"`
-	MaxIdleTime           int      `yaml:"max-idle-time" json:"max-idle-time,omitempty"`
-	AuthenticationTimeout int      `yaml:"authentication-timeout" json:"authentication-timeout,omitempty"`
-	ALPN                  []string `yaml:"alpn" json:"alpn,omitempty"`
-	MaxUdpRelayPacketSize int      `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
-}
-
 type TLS struct {
 	Certificate string `yaml:"certificate"`
 	PrivateKey  string `yaml:"private-key"`
-}
-
-func (t TuicServer) String() string {
-	b, _ := json.Marshal(t)
-	return string(b)
-}
-
-// Tun config
-type Tun struct {
-	Enable              bool             `yaml:"enable" json:"enable"`
-	Device              string           `yaml:"device" json:"device"`
-	Stack               C.TUNStack       `yaml:"stack" json:"stack"`
-	DNSHijack           []netip.AddrPort `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute           bool             `yaml:"auto-route" json:"auto-route"`
-	AutoDetectInterface bool             `yaml:"auto-detect-interface" json:"auto-detect-interface"`
-	RedirectToTun       []string         `yaml:"-" json:"-"`
-
-	MTU                    uint32            `yaml:"mtu" json:"mtu,omitempty"`
-	Inet4Address           []LC.ListenPrefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
-	Inet6Address           []LC.ListenPrefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
-	StrictRoute            bool              `yaml:"strict-route" json:"strict-route,omitempty"`
-	Inet4RouteAddress      []LC.ListenPrefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
-	Inet6RouteAddress      []LC.ListenPrefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
-	IncludeUID             []uint32          `yaml:"include-uid" json:"include-uid,omitempty"`
-	IncludeUIDRange        []string          `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
-	ExcludeUID             []uint32          `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
-	ExcludeUIDRange        []string          `yaml:"exclude-uid-range" json:"exclude-uid-range,omitempty"`
-	IncludeAndroidUser     []int             `yaml:"include-android-user" json:"include-android-user,omitempty"`
-	IncludePackage         []string          `yaml:"include-package" json:"include-package,omitempty"`
-	ExcludePackage         []string          `yaml:"exclude-package" json:"exclude-package,omitempty"`
-	EndpointIndependentNat bool              `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
-	UDPTimeout             int64             `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
 }
 
 // IPTables config
@@ -203,7 +156,7 @@ type Config struct {
 	Listeners     map[string]C.InboundListener
 	Providers     map[string]providerTypes.ProxyProvider
 	RuleProviders map[string]providerTypes.RuleProvider
-	Tunnels       []tunnel.Tunnel
+	Tunnels       []LC.Tunnel
 	Sniffer       *Sniffer
 	TLS           *TLS
 }
@@ -273,32 +226,32 @@ type RawTuicServer struct {
 }
 
 type RawConfig struct {
-	Port                  int             `yaml:"port"`
-	SocksPort             int             `yaml:"socks-port"`
-	RedirPort             int             `yaml:"redir-port"`
-	TProxyPort            int             `yaml:"tproxy-port"`
-	MixedPort             int             `yaml:"mixed-port"`
-	ShadowSocksConfig     string          `yaml:"ss-config"`
-	VmessConfig           string          `yaml:"vmess-config"`
-	InboundTfo            bool            `yaml:"inbound-tfo"`
-	Authentication        []string        `yaml:"authentication"`
-	AllowLan              bool            `yaml:"allow-lan"`
-	BindAddress           string          `yaml:"bind-address"`
-	Mode                  T.TunnelMode    `yaml:"mode"`
-	UnifiedDelay          bool            `yaml:"unified-delay"`
-	LogLevel              log.LogLevel    `yaml:"log-level"`
-	IPv6                  bool            `yaml:"ipv6"`
-	ExternalController    string          `yaml:"external-controller"`
-	ExternalControllerTLS string          `yaml:"external-controller-tls"`
-	ExternalUI            string          `yaml:"external-ui"`
-	Secret                string          `yaml:"secret"`
-	Interface             string          `yaml:"interface-name"`
-	RoutingMark           int             `yaml:"routing-mark"`
-	Tunnels               []tunnel.Tunnel `yaml:"tunnels"`
-	GeodataMode           bool            `yaml:"geodata-mode"`
-	GeodataLoader         string          `yaml:"geodata-loader"`
-	TCPConcurrent         bool            `yaml:"tcp-concurrent" json:"tcp-concurrent"`
-	EnableProcess         bool            `yaml:"enable-process" json:"enable-process"`
+	Port                  int          `yaml:"port"`
+	SocksPort             int          `yaml:"socks-port"`
+	RedirPort             int          `yaml:"redir-port"`
+	TProxyPort            int          `yaml:"tproxy-port"`
+	MixedPort             int          `yaml:"mixed-port"`
+	ShadowSocksConfig     string       `yaml:"ss-config"`
+	VmessConfig           string       `yaml:"vmess-config"`
+	InboundTfo            bool         `yaml:"inbound-tfo"`
+	Authentication        []string     `yaml:"authentication"`
+	AllowLan              bool         `yaml:"allow-lan"`
+	BindAddress           string       `yaml:"bind-address"`
+	Mode                  T.TunnelMode `yaml:"mode"`
+	UnifiedDelay          bool         `yaml:"unified-delay"`
+	LogLevel              log.LogLevel `yaml:"log-level"`
+	IPv6                  bool         `yaml:"ipv6"`
+	ExternalController    string       `yaml:"external-controller"`
+	ExternalControllerTLS string       `yaml:"external-controller-tls"`
+	ExternalUI            string       `yaml:"external-ui"`
+	Secret                string       `yaml:"secret"`
+	Interface             string       `yaml:"interface-name"`
+	RoutingMark           int          `yaml:"routing-mark"`
+	Tunnels               []LC.Tunnel  `yaml:"tunnels"`
+	GeodataMode           bool         `yaml:"geodata-mode"`
+	GeodataLoader         string       `yaml:"geodata-loader"`
+	TCPConcurrent         bool         `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	EnableProcess         bool         `yaml:"enable-process" json:"enable-process"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
@@ -734,6 +687,7 @@ func parseRuleProviders(cfg *RawConfig) (ruleProviders map[string]providerTypes.
 }
 
 func parseSubRules(cfg *RawConfig, proxies map[string]C.Proxy) (subRules map[string][]C.Rule, err error) {
+	subRules = map[string][]C.Rule{}
 	for name, rawRules := range cfg.SubRules {
 		if len(name) == 0 {
 			return nil, fmt.Errorf("sub-rule name is empty")
@@ -901,7 +855,9 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
 		}
 
-		var addr, dnsNetType, proxyAdapter string
+		proxyAdapter := u.Fragment
+
+		var addr, dnsNetType string
 		params := map[string]string{}
 		switch u.Scheme {
 		case "udp":
@@ -915,6 +871,7 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			dnsNetType = "tcp-tls" // DNS over TLS
 		case "https":
 			host := u.Host
+			proxyAdapter = ""
 			if _, _, err := net.SplitHostPort(host); err != nil && strings.Contains(err.Error(), "missing port in address") {
 				host = net.JoinHostPort(host, "443")
 			} else {
@@ -1162,21 +1119,6 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 }
 
 func parseTun(rawTun RawTun, general *General) error {
-	var dnsHijack []netip.AddrPort
-
-	for _, d := range rawTun.DNSHijack {
-		if _, after, ok := strings.Cut(d, "://"); ok {
-			d = after
-		}
-		d = strings.Replace(d, "any", "0.0.0.0", 1)
-		addrPort, err := netip.ParseAddrPort(d)
-		if err != nil {
-			return fmt.Errorf("parse dns-hijack url error: %w", err)
-		}
-
-		dnsHijack = append(dnsHijack, addrPort)
-	}
-
 	tunAddressPrefix := T.FakeIPRange()
 	if !tunAddressPrefix.IsValid() {
 		tunAddressPrefix = netip.MustParsePrefix("198.18.0.1/16")
@@ -1187,11 +1129,11 @@ func parseTun(rawTun RawTun, general *General) error {
 		rawTun.Inet6Address = nil
 	}
 
-	general.Tun = Tun{
+	general.Tun = LC.Tun{
 		Enable:              rawTun.Enable,
 		Device:              rawTun.Device,
 		Stack:               rawTun.Stack,
-		DNSHijack:           dnsHijack,
+		DNSHijack:           rawTun.DNSHijack,
 		AutoRoute:           rawTun.AutoRoute,
 		AutoDetectInterface: rawTun.AutoDetectInterface,
 		RedirectToTun:       rawTun.RedirectToTun,
@@ -1217,7 +1159,7 @@ func parseTun(rawTun RawTun, general *General) error {
 }
 
 func parseTuicServer(rawTuic RawTuicServer, general *General) error {
-	general.TuicServer = TuicServer{
+	general.TuicServer = LC.TuicServer{
 		Enable:                rawTuic.Enable,
 		Listen:                rawTuic.Listen,
 		Token:                 rawTuic.Token,

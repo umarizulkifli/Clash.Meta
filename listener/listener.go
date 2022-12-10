@@ -532,7 +532,12 @@ func ReCreateTun(tunConf LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.Pack
 		return
 	}
 
-	tunLister, err = sing_tun.New(tunConf, tcpIn, udpIn)
+	lister, err := sing_tun.New(tunConf, tcpIn, udpIn)
+	if err != nil {
+		return
+	}
+	tunLister = lister
+
 	log.Infoln("[TUN] Tun adapter listening at: %s", tunLister.Address())
 }
 
@@ -625,7 +630,7 @@ func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<-
 	log.Infoln("Auto redirect proxy listening at: %s, attached tc ebpf program to interfaces %v", autoRedirListener.Address(), autoRedirProgram.RawNICs())
 }
 
-func PatchTunnel(tunnels []tunnel.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) {
+func PatchTunnel(tunnels []LC.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) {
 	tunnelMux.Lock()
 	defer tunnelMux.Unlock()
 
@@ -664,7 +669,7 @@ func PatchTunnel(tunnels []tunnel.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan
 
 	newElm := lo.FlatMap(
 		tunnels,
-		func(tunnel tunnel.Tunnel, _ int) []addrProxy {
+		func(tunnel LC.Tunnel, _ int) []addrProxy {
 			return lo.Map(
 				tunnel.Network,
 				func(network string, _ int) addrProxy {
@@ -825,7 +830,7 @@ func hasTunConfigChange(tunConf *LC.Tun) bool {
 	}
 
 	sort.Slice(tunConf.DNSHijack, func(i, j int) bool {
-		return tunConf.DNSHijack[i].Addr().Less(tunConf.DNSHijack[j].Addr())
+		return tunConf.DNSHijack[i] < tunConf.DNSHijack[j]
 	})
 
 	sort.Slice(tunConf.Inet4Address, func(i, j int) bool {
