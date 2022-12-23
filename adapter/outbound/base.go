@@ -18,6 +18,7 @@ type Base struct {
 	iface  string
 	tp     C.AdapterType
 	udp    bool
+	tfo    bool
 	rmark  int
 	id     string
 	prefer C.DNSPrefer
@@ -76,6 +77,11 @@ func (b *Base) SupportUDP() bool {
 	return b.udp
 }
 
+// SupportTFO implements C.ProxyAdapter
+func (b *Base) SupportTFO() bool {
+	return b.tfo
+}
+
 // MarshalJSON implements C.ProxyAdapter
 func (b *Base) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]string{
@@ -90,7 +96,7 @@ func (b *Base) Addr() string {
 }
 
 // Unwrap implements C.ProxyAdapter
-func (b *Base) Unwrap(metadata *C.Metadata) C.Proxy {
+func (b *Base) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	return nil
 }
 
@@ -130,6 +136,7 @@ type BaseOption struct {
 	Addr        string
 	Type        C.AdapterType
 	UDP         bool
+	TFO         bool
 	Interface   string
 	RoutingMark int
 	Prefer      C.DNSPrefer
@@ -141,6 +148,7 @@ func NewBase(opt BaseOption) *Base {
 		addr:   opt.Addr,
 		tp:     opt.Type,
 		udp:    opt.UDP,
+		tfo:    opt.TFO,
 		iface:  opt.Interface,
 		rmark:  opt.RoutingMark,
 		prefer: opt.Prefer,

@@ -31,6 +31,8 @@ const (
 	Vless
 	Trojan
 	Hysteria
+	WireGuard
+	Tuic
 )
 
 const (
@@ -84,6 +86,7 @@ type ProxyAdapter interface {
 	Type() AdapterType
 	Addr() string
 	SupportUDP() bool
+	SupportTFO() bool
 	MarshalJSON() ([]byte, error)
 
 	// StreamConn wraps a protocol around net.Conn with Metadata.
@@ -106,12 +109,13 @@ type ProxyAdapter interface {
 	ListenPacketOnStreamConn(c net.Conn, metadata *Metadata) (PacketConn, error)
 
 	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.
-	Unwrap(metadata *Metadata) Proxy
+	Unwrap(metadata *Metadata, touch bool) Proxy
 }
 
 type Group interface {
 	URLTest(ctx context.Context, url string) (mp map[string]uint16, err error)
 	GetProxies(touch bool) []Proxy
+	Touch()
 }
 
 type DelayHistory struct {
@@ -164,6 +168,10 @@ func (at AdapterType) String() string {
 		return "Trojan"
 	case Hysteria:
 		return "Hysteria"
+	case WireGuard:
+		return "WireGuard"
+	case Tuic:
+		return "Tuic"
 
 	case Relay:
 		return "Relay"
@@ -197,4 +205,14 @@ type UDPPacket interface {
 
 	// LocalAddr returns the source IP/Port of packet
 	LocalAddr() net.Addr
+}
+
+type UDPPacketInAddr interface {
+	InAddr() net.Addr
+}
+
+// PacketAdapter is a UDP Packet adapter for socks/redir/tun
+type PacketAdapter interface {
+	UDPPacket
+	Metadata() *Metadata
 }
